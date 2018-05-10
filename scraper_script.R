@@ -12,19 +12,16 @@ library(tm)
 library(wordcloud)  
 library(RColorBrewer)
 
-setwd('/home/davi/Desktop/youtube_mining/')
+setwd('/home/toshi/Desktop/work_butanta/youtube_mining/')
 
 client_id <- '812757213029-tt2n55mmbm4143ehdhap21e25ihp0kse.apps.googleusercontent.com' 
-
 key <- 'SblVJsud6AqXdqKpQJamZRxJ'
 
 yt_oauth(client_id, key)
 
-all_vid_nerdologia <- get_all_channel_video_stats(channel_id = 'UClu474HMt895mVxZdlIHXEA', mine = FALSE)
+# save(file = 'all_vid_nerdologia.RObj', all_vid_nerdologia)
 
-saveRDS(all_vid_nerdologia, "all_vid_nerdologia.RDS")
-
-all_vid_nerdologia <- readRDS('all_vid_nerdologia.RDS')
+load('all_vid_nerdologia.RObj')
 
 str(all_vid_nerdologia)
 
@@ -95,54 +92,47 @@ all_vid_nerdologia %>%
 
 all_vid_nerdologia_gather[which(all_vid_nerdologia_gather$title == 'Sexismo'), ]
 
-all_vid_nerdologia_gather %>%
-    arrange(publication_date) %>%
-    plot_ly(source = "source") %>% 
-    add_lines(x = ~publication_date, y = ~counts,
-              mode = "lines+marker", opacity = 1, 
-              color = ~type_counts,
-              hoverinfo = 'y',
-              line = list(width = 4)) %>%
-    layout(hovermode = 'compare')
 
 # Preciso disso!!!
 # https://plot.ly/r/shiny-coupled-hover-events/
 
-all_vid_nerdologia_gather$id[1:3]
- 
-get_url_capition <- function(video_id){
-     
-     url_request <- paste0('http://diycaptions.com/php/get-automatic-captions-as-txt.php?id=', video_id, '&language=asr')     
-     
-     html_page_text <- lapply(url_request, function(x){ html_text(read_html(x))  })
-     
-     text_df <- data.frame(doc_id = video_id, text = unlist(html_page_text), stringsAsFactors = FALSE , drop=FALSE)
-     
-     return(text_df)
-   
- }
 
 
 library(RCurl)
-library(XML)
 
-all_vid_nerdologia$title
-all_vid_nerdologia$id
+url_request <- paste0('http://diycaptions.com/php/get-automatic-captions-as-txt.php?id=',  all_vid_nerdologia$id, '&language=asr')     
 
-#html_page <- list()
+# html_page <- list()
 
-for(i in 47:length(url_request) ){
+for(i in 1:length(url_request) ){
     
     html_page[i] <- getURL(url_request[i])
     
-    Sys.sleep(60)
+    Sys.sleep(30)
     
 }
-# saveRDS(object = html_page, file = 'html_page.RDS')
 
-df_corpus <- Corpus(DataframeSource(teste))
+# save(file = 'html_page.RObj', html_page)
 
-df_corpus_filtered <- df_corpus %>%
+load("html_page.RObj")
+
+html_page_text <- lapply(html_page, function(x){
+    
+    split_1 <- strsplit(x[[1]], '<br><br>')[[1]][2]
+    strsplit(split_1[[1]], '\t\t</div>')[[1]][1]
+    
+})
+
+save(file = 'html_page_text.RData', html_page_text)
+
+# Generate a data frame
+text_df_total <- data.frame(doc_id = all_vid_nerdologia$id, text = unlist(html_page_text), stringsAsFactors = FALSE , drop=FALSE)
+
+text_df_total <- text_df_total[ which(is.na(text_df_total$text)), ]
+
+text_corpus_df <- Corpus(DataframeSource(text_df_total))
+
+text_corpus_df_filtered <- text_corpus_df %>%
     tm_map(stripWhitespace)  %>%    
     tm_map(removePunctuation) %>%                              
     tm_map(removeNumbers)   %>%                               
@@ -151,19 +141,15 @@ df_corpus_filtered <- df_corpus %>%
     tm_map(stripWhitespace) %>%    
     tm_map(content_transformer(tolower))
 
-inspect(df_corpus_filtered)
+# Criando a matrix de termos:
+corpus_tf <- TermDocumentMatrix(text_corpus_df_filtered, control = list(minWordLength = 3))
 
-inspect(df_corpus)
+corpus_m <- as.matrix(corpus_tf)
 
-#Criando a matrix de termos:
-df_corpus_tf <- TermDocumentMatrix(df_corpus_filtered, control = list(minWordLength = 4))
-df_corpus_df = as.matrix(df_corpus_tf)
-?TermDocumentMatrix
-v <- sort(rowSums(as.matrix(df_corpus_df)), decreasing=TRUE)
-df <- data.frame(word=names(v), freq=v)
+corpus_m_sorted <- sort(rowSums(as.matrix(corpus_m)), decreasing=TRUE)
 
-rownames(df) <- NULL
+df_total <- data.frame(word=names(corpus_m_sorted), freq=as.numeric(corpus_m_sorted))
 
-wordcloud(df$word, df$freq, min.freq = 2, max.words=50, random.order=FALSE, rot.per=0.35, 
+wordcloud(df_total$word, df_total$freq, min.freq = 3, max.words=100, random.order=FALSE, rot.per=0.35, 
           colors=brewer.pal(8, "Dark2"))
 
