@@ -1,6 +1,5 @@
 # Get youtube caption
 library(rvest)
-library(lexiconPT)
 library(ggplot2)
 library(dplyr)
 library(tidyr)
@@ -9,12 +8,11 @@ library(dygraphs)
 library(plotly)
 library(tuber)
 library(stringr)
-library(PTtextmining)
 library(tm)
 library(wordcloud)  
 library(RColorBrewer)
 
-setwd('/home/toshi/Desktop/work_butanta/youtube_scraper/')
+setwd('/home/davi/Desktop/youtube_mining/')
 
 client_id <- '812757213029-tt2n55mmbm4143ehdhap21e25ihp0kse.apps.googleusercontent.com' 
 
@@ -110,17 +108,39 @@ all_vid_nerdologia_gather %>%
 # Preciso disso!!!
 # https://plot.ly/r/shiny-coupled-hover-events/
 
-ids <- as.character(all_vid_nerdologia_gather$id[86])
+all_vid_nerdologia_gather$id[1:3]
+ 
+get_url_capition <- function(video_id){
+     
+     url_request <- paste0('http://diycaptions.com/php/get-automatic-captions-as-txt.php?id=', video_id, '&language=asr')     
+     
+     html_page_text <- lapply(url_request, function(x){ html_text(read_html(x))  })
+     
+     text_df <- data.frame(doc_id = video_id, text = unlist(html_page_text), stringsAsFactors = FALSE , drop=FALSE)
+     
+     return(text_df)
+   
+ }
 
-url_request <- paste0('http://diycaptions.com/php/get-automatic-captions-as-txt.php?id=', ids, '&language=asr')
 
-html_pages <- lapply(url_request, function(x){ html_text(read_html(x))  })
+library(RCurl)
+library(XML)
 
-text <- html_pages[[1]]
+all_vid_nerdologia$title
+all_vid_nerdologia$id
 
-df <- data.frame(doc_id = ids[1], text, stringsAsFactors = FALSE , drop=FALSE)
+#html_page <- list()
 
-df_corpus <- Corpus(DataframeSource(df))
+for(i in 47:length(url_request) ){
+    
+    html_page[i] <- getURL(url_request[i])
+    
+    Sys.sleep(60)
+    
+}
+# saveRDS(object = html_page, file = 'html_page.RDS')
+
+df_corpus <- Corpus(DataframeSource(teste))
 
 df_corpus_filtered <- df_corpus %>%
     tm_map(stripWhitespace)  %>%    
@@ -146,48 +166,4 @@ rownames(df) <- NULL
 
 wordcloud(df$word, df$freq, min.freq = 2, max.words=50, random.order=FALSE, rot.per=0.35, 
           colors=brewer.pal(8, "Dark2"))
-
-
-chart_link = api_create(p, filename="scatter-modes")
-
-chart_link
-
-video_id <- '0Ji9Q6sa8-o'
-
-url_request <- paste0('http://diycaptions.com/php/get-automatic-captions-as-txt.php?id=',
-                      video_id,
-                      '&language=asr')
-
-page <- read_html(url_request)  
-
-page %>%
-    html_nodes('.well') %>%
-    html_text()
-
-text_counts <- page %>%
-    html_text() %>%
-    strsplit('\\W+') %>%
-    unlist() %>% 
-    table() %>%
-    sort(decreasing = TRUE) 
-
-words <- names(text_counts)
-
-counts <- as.numeric(text_counts)
-
-df_text_counts <- data.frame(words, counts)
-
-df_text_counts$words <- as.character(words)
-
-str(df_text_counts)
-
-boxplot(df_text_counts$counts)
-
-summary(df_text_counts)
-
-subset(df_text_counts, counts > 20 & counts < 30 ) %>%
-    ggplot(aes(x=words, y=counts)) +
-    geom_bar(stat='identity') +
-    coord_flip()
-
 
