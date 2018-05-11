@@ -24,8 +24,6 @@ all_vid_nerdologia <- get_all_channel_video_stats(channel_id = 'UClu474HMt895mVx
 
 saveRDS(all_vid_nerdologia, "all_vid_nerdologia.RDS")
 
-all_vid_nerdologia <- readRDS('all_vid_nerdologia.RDS')
-
 str(all_vid_nerdologia)
 
 date_split_list <- strsplit(x = as.character(all_vid_nerdologia$publication_date), split = 'T')

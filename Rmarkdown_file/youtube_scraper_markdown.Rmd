@@ -6,9 +6,9 @@ output: html_document
 ---
 
 ```{r, echo=FALSE}
-load('../Raw_files/all_vid_nerdologia.RData')
-load('../Raw_files/html_page.RData')
-load('../Raw_files/html_page_text.RData')
+load('../all_vid_nerdologia.RData')
+load('../html_page.RData')
+load('../html_page_text.RData')
 ```
 
 
@@ -156,7 +156,6 @@ all_vid_nerdologia %>%
     kable_styling("striped", full_width= F) %>%
     column_spec(1:4, bold= T) %>%
     row_spec(1:10, bold= T, color= "white", background= "#3399ff")
-
 ```
 
 
@@ -189,7 +188,7 @@ all_vid_nerdologia %>%
 Agora, deixarei salvo o objeto da tabela processada, para carregar dentro do meu dashboard.
 
 ```{r, eval=FALSE}
-save(file= 'all_vid_nerdologia.RObj', all_vid_nerdologia)
+save(file= 'all_vid_nerdologia.RData', all_vid_nerdologia)
 ```
 
 ### 2.1.Extraindo dados textuais das legendas e formatando
@@ -211,6 +210,18 @@ for(i in 1:length(url_request) ){
 
 save(file= 'html_page.RObj', html_page)
 ```
+
+Precisarei da minha lista de texto ordenado pela data quanto for retornar um index do plot
+
+```{r, eval=FALSE}
+
+all_vid_nerdologia['index'] <- 1:nrow(all_vid_nerdologia)
+all_vid_nerdologia <- all_vid_nerdologia %>% arrange(publication_date)
+html_page_text_sorted <- html_page_text[all_vid_nerdologia$index]
+save(file='html_page_text_sorted.RData', html_page_text_sorted)
+
+```
+
 
 Agora farei o pré-tratamento dos dados textuais e a limpeza propriamente dita
 
@@ -298,44 +309,32 @@ df_total_titulo <- df_total[which(nchar(df_total$word) > 2), ]
 
 wordcloud(df_total_titulo$word, df_total_titulo$freq, min.freq= 2, max.words= 100, random.order= FALSE, rot.per= 0.35, colors=brewer.pal(8, "Dark2"))
 
-
 ```
-
-
-
 
 O gráfico do dashboard deve ser similar a este, porém, responsivo com mais informações e opções de filtro.
 
 ```{r,  eval=TRUE, out.width='100%', out.height='60%'}
+
 all_vid_nerdologia %>%
-    mutate(proportion_like= likeCount / viewCount,
-           proportion_dislike= dislikeCount / viewCount) %>%
-    arrange(publication_date) %>%
-    plot_ly() %>%
-    add_trace(x= ~publication_date, y= ~viewCount, 
-              name= 'View count', type= 'scatter', 
-              mode="markers+lines", text= ~paste('Video: ', title),
-              line= list(color= '#440154FF ', width= 4)) %>%
-    add_trace(x= ~publication_date, y= ~likeCount, 
-              name= 'Like count', type= 'scatter',
-              mode="markers+lines", text= ~paste('Video: ', title),
-              line= list(color= '#39568CFF', width= 4)) %>%
-    add_trace(x= ~publication_date, y= ~dislikeCount,
-              name= 'Dislike count', type= 'scatter', 
-              mode= "markers+lines", text= ~paste('Video: ', title),
-              line= list(color = '#29AF7FFF', width= 4)) %>%
-    add_trace(x= ~publication_date, y= ~commentCount,
-              name= 'Comment count', type= 'scatter', 
-              mode= "markers+lines", text= ~paste('Video: ', title),
-              line= list(color= '#FDE725FF', width= 4)) %>%
-    layout(xaxis= list(title= "Video publication date"),
-           yaxis= list (title= "Metric's count"),
-           font=  list(size= 16),
-           hovermode= 'compare')
+    gather(key= type_counts, value= counts, 
+           c(likeCount, dislikeCount, commentCount, viewCount)) %>%
+    filter(str_detect('likeCount|dislikeCount|commentCount', type_counts)) %>%
+    ggplot(aes(x= publication_date, y= as.numeric(counts), col= type_counts)) +
+    geom_line(size=1, alpha=0.7) +
+    geom_point(size=1) +
+    scale_x_date() +
+    theme_bw() +
+    scale_color_manual(values = c('#440154FF', '#39568CFF', '#29AF7FFF'))
 
 ```
 
+## Criando um dashboard dinâmico
 
+Para prover uma visualização diferenciada dos dados, optei por criar um dashboard dinâmico, retivo ao cursos do mouse e que também aceita diferentes parâmetros para gerar os resultados. Assim, podemos abranger um pouco mais do nosso aprendizado. :D
+
+<p align='center'> 
+![](../Images/ideia.jpg)
+</p>
 
 
 

@@ -1,123 +1,177 @@
-## app.R ##
 library(shinydashboard)
 library(highcharter)
+library(ggplot2)
 library(dplyr)
+library(plotly)
+library(tm)
+library(wordcloud)  
+library(VennDiagram)
+library(kableExtra)
 
-
-load('brazil_map.RData')
+load('all_vid_nerdologia.RData')
+load('html_page_text.RData')
+load('html_page_text_sorted.RData')
 
 ui <- dashboardPage(
-    dashboardHeader(title = "Alpha dashboard"),
+    # Header ----
+    dashboardHeader(title = "Youtube metrics"),
     
-    dashboardSidebar(
-        sidebarMenu(
-            menuItem("Dashboard", tabName = "dashboard", icon = icon("dashboard")),
-            menuItem("Widgets", tabName = "widgets", icon = icon("th"))
-        )
+    # Sidebar content ----
+    dashboardSidebar(collapsed = TRUE,
+                     sidebarMenu(
+                         menuItem("Dashboard", tabName = "dashboard", icon = icon("dashboard"))
+                     )
     ),
     
-    ## Body content ----
+    # Body content ----
     dashboardBody(
+        
+        includeCSS("www/custom.css"),
         tabItems(
             # First tab content
-            tabItem(tabName = "dashboard",
+            tabItem(tabName= "dashboard",
+                    
                     fluidRow(
-                        column(width = 4, highchartOutput("hcmap_br", height = "500px")),
-                        column(width = 4, highchartOutput("barplot_total")),
-                        column(width = 4, highchartOutput("pie_plot"))
+                        column(width= 7,
+                               tags$blockquote(("Metrics from video captions")),
+                               plotlyOutput(outputId = 'metrics_total_plot', height= '400px')
+                               
+                        ),
+                        column(width= 5,
+                               wellPanel(
+                                   plotOutput(outputId= 'cursor_wc_plot', height= '400px')
+                               )
+                        )
+                    ),
+                    
+                    fluidRow(
+                        column(4,
+                               tags$blockquote(("Metrics  from video titles")),
+                               valueBoxOutput("likebox", width = 15),
+                               valueBoxOutput("dislikebox", width = 15),
+                               valueBoxOutput("commentbox", width = 15)
+                        )
                     )
-            ),
-            
-            # Second tab content
-            tabItem(tabName = "widgets",
-                    h2("Widgets tab content")
+                    
             )
         )
     )
 )
 
 server <- function(input, output){
-    # Br map process ----
-    brazil_data <- get_data_from_map(brazil_map) 
     
-    data_fake <- brazil_data %>% 
-        dplyr::select(code = `hc-a2`) %>% 
-        mutate(value = 1e5 * abs(rt(nrow(.), df = 10)))
-    
-    output$hcmap_br <- renderHighchart({      
-        # Explanation about click value 
-        # https://stackoverflow.com/questions/37208989/how-to-know-information-about-the-clicked-bar-in-highchart-column-r-shiny-plot
-        canvasClickFunction <- JS("function(event) {Shiny.onInputChange('canvasClicked', event.point.name);}") # event point + name gets the state name!
-        # Esse eh especifico para zoom
-        hcmap(map = "countries/br/br-all",
-              data = data_fake, value = "value",
-              joinBy = c("hc-a2", "code"),
-              name = "Fake data",
-              dataLabels = list(enabled = TRUE, 
-                                format = '{point.name}'),
-              borderColor = "#FAFAFA", borderWidth = 0.1,
-              tooltip = list(valueDecimals = 2, 
-                             valuePrefix = "$",
-                             valueSuffix = " USD")) %>%
-            hc_mapNavigation(enabled = TRUE) %>%
-            hc_plotOptions(series = list(events = list(click = canvasClickFunction)))
+    # Plot wordcloud total ----
+    output$metrics_total_plot <- renderPlotly({
         
-    })   
-    
-    # makeReactiveBinding("outputText")
-    
-    # observeEvent(input$canvasClicked, {
-    #     outputText <<- paste0("You clicked on series ", input$canvasClicked) #defined on JS()
-    # })
-    # 
-    # output$text <- renderText({
-    #     outputText      
-    # })
-    
-    # Dependent data from click in map  ----
-    
-    data_example <- read.table(file='data_text.txt', sep='\t', header = T)
-    
-    makeReactiveBinding("click_value")
-    
-    observeEvent(input$canvasClicked, {
-        click_value <<-  input$canvasClicked
+        all_vid_nerdologia %>%
+            arrange(publication_date) %>%
+            plot_ly(source = "source") %>%
+            add_trace(x = ~publication_date, y = ~viewCount, 
+                      name = 'View count', type = 'scatter', 
+                      mode ="markers+lines", text = ~paste('Video: ', title),
+                      line = list(color = '#440154FF ', width = 2)) %>%
+            add_trace(x = ~publication_date, y = ~likeCount, 
+                      name = 'Like count', type = 'scatter',
+                      mode ="markers+lines", text = ~paste('Video: ', title),
+                      line = list(color = '#39568CFF', width = 2)) %>%
+            add_trace(x = ~publication_date, y = ~dislikeCount,
+                      name = 'Dislike count', type = 'scatter', 
+                      mode = "markers+lines", text = ~paste('Video: ', title),
+                      line = list(color = '#29AF7FFF', width = 2)) %>%
+            add_trace(x = ~publication_date, y = ~commentCount,
+                      name = 'Comment count', type = 'scatter', 
+                      mode = "markers+lines", text = ~paste('Video: ', title),
+                      line = list(color = '#FDE725FF', width = 2)) %>%
+            layout(xaxis = list(title = ""),
+                   yaxis = list (title = "Metric's count"),
+                   font =  list(size = 12),
+                   hovermode = 'compare',
+                   legend = list(orientation = 'h')) 
     })
     
-    plot_df <- reactive({
+    # Plot over cursor selected word cloud ----
+    output$cursor_wc_plot <- renderPlot({
         
-        if(length(click_value) < 1){
-            data_example
-        }else{
-            data_example %>%
-                filter(states_names == click_value)
-        }
+        eventdata <- event_data("plotly_hover", source = "source")
         
+        validate(need(!is.null(eventdata), "Pass the mouse over the point :)"))
+        
+        cursor_id <- as.numeric(eventdata$pointNumber)[1] + 1
+        
+        all_vid_nerdologia <- all_vid_nerdologia %>%
+            arrange(publication_date)
+        
+        text_df_cursor <- data.frame(doc_id= all_vid_nerdologia$id[ cursor_id ], 
+                                     text= unlist(html_page_text_sorted[ cursor_id ]), 
+                                     stringsAsFactors= FALSE , drop=FALSE)
+        
+        cursor_corpus_df <- Corpus(DataframeSource(text_df_cursor))
+        
+        cursor_corpus_df_filtered <- cursor_corpus_df %>%
+            tm_map(stripWhitespace)  %>%    
+            tm_map(removePunctuation) %>%                              
+            tm_map(removeNumbers)   %>%                               
+            tm_map(removeWords, c(stopwords("portuguese"))) %>%  
+            tm_map(removeNumbers) %>%  
+            tm_map(stripWhitespace) %>%    
+            tm_map(content_transformer(tolower))
+        
+        # Creanting a term matrix
+        corpus_tf <- TermDocumentMatrix(cursor_corpus_df_filtered)
+        
+        cursor_corpus_m <- as.matrix(corpus_tf)
+        
+        cursor_corpus_m_sorted <- sort(rowSums(as.matrix(cursor_corpus_m)), decreasing= TRUE)
+        
+        df_cursor_final <- data.frame(word= names(cursor_corpus_m_sorted), freq= as.numeric(cursor_corpus_m_sorted))
+        
+        df_cursor_final$word <- as.character(df_cursor_final$word)
+        
+        df_cursor_final <- df_cursor_final[which(nchar(df_cursor_final$word) > 3), ]
+        
+        wordcloud(df_cursor_final$word, df_cursor_final$freq, min.freq = 2, max.words= 50,
+                  random.order= FALSE, colors=brewer.pal(8, "Dark2"), scale=c(3, 0.09))
     })
     
-    output$barplot_total <- renderHighchart({    
-        
-        hchart(plot_df(), "column", hcaes(x = states_names, y = counts, group = sex))
+    # Metrics top videos box ----
     
+    # Like box
+    output$likebox <- renderValueBox({
+        toplike <- all_vid_nerdologia %>%
+            arrange(desc(likeCount)) %>%
+            head(10)
+        
+        valueBox(toplike$title[1], 
+                 paste0("Most liked video with: ", toplike$likeCount[1], " likes"), 
+                 icon = icon("thumbs-up", lib = "glyphicon"),
+            color = "blue" 
+        )
     })
     
-    # Pie
-    output$pie_plot <- renderHighchart({    
-      
-        temp_df <- plot_df() %>%
-            filter(states_names == click_value) %>%
-            group_by(states_names, sex)
+    # Dislike box
+    output$dislikebox <- renderValueBox({
+        topdislike <- all_vid_nerdologia %>%
+            arrange(desc(dislikeCount)) %>%
+            head(10)
         
-        temp_df$percent <- temp_df$counts/sum(temp_df$counts) 
-        
-        highchart() %>% 
-            hc_chart(type = "pie") %>%
-            hc_add_series_labels_values(values = temp_df$percent, labels = temp_df$sex, name=temp_df$states_names)
-    
+        valueBox(topdislike$title[1], 
+                 paste0("Most disliked video with: ", topdislike$dislikeCount[1], " dislikes"),
+                 icon = icon("thumbs-down", lib = "glyphicon"),
+                 color = "red" 
+        )
     })
-
-    output$click_val <- renderText({
-        click_value
+    
+    # Comments box
+    output$commentbox <- renderValueBox({
+        topcomment <- all_vid_nerdologia %>%
+            arrange(desc(commentCount)) %>%
+            head(10)
+        
+        valueBox(topcomment$title[1], 
+                 paste0("Most Commented video with: ", topcomment$commentCount[1], " comments"),
+                 icon = icon("comment", lib = "font-awesome"),
+                 color = "orange" 
+        )
     })
 }
 
