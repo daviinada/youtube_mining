@@ -1,16 +1,21 @@
 ---
 title: "Análise de dados do Youtube"
-author: "Davi Toshio"
+author: "Davi Toshio Inada"
 date: "May 10, 2018"
 output: html_document
 ---
 
-```{r}
+```{r, echo=FALSE}
 load('../Raw_files/all_vid_nerdologia.RData')
-
 load('../Raw_files/html_page.RData')
 load('../Raw_files/html_page_text.RData')
 ```
+
+
+<style>
+body {
+text-align: justify}
+</style>
 
 
 <style type1 text/css'>
@@ -59,34 +64,33 @@ pre { /* Code block - determines code spacing between lines */
 knitr::opts_chunk$set(echo = TRUE)
 ```
 <p align='center'> 
-![](/home/toshi/Desktop/work_butanta/youtube_mining/Images/youtube_logo.png)
+![](../Images/youtube_logo.png)
 </p>
 
 
 
 ## 1.Introdução
 
-Abordarei neste tópico uma forma de explorar informações contidas em um determinado canal do Youtube. Como exemplo, estarei demonstrando a obtenção e análise dos dados proveniente do canal "Nerdologia", dos autores Atila Iamarino e Filipe Figueiredo. Os dados manipulados servem como base para a apresentação gráfica em um dashboard dinâmico, desenvolvido em Shiny (linguagem R). Por hora, proponho a análise quantitativa de métricas como visualizações, likes, dislikes e comentários. Bem como a análise textual das legendas geradas 
-automaticamente pelo sistema do Youtube (quando habilitado pelo(s) autor(es) do canal).
-
+<p align='justify'> 
+Abordarei neste tópico uma forma de explorar informações contidas em um determinado canal do Youtube. Como exemplo, estarei demonstrando a obtenção e análise dos dados proveniente do canal "Nerdologia", dos autores Atila Iamarino e Filipe Figueiredo. Os dados manipulados servem como base para a apresentação gráfica em um dashboard dinâmico, desenvolvido em Shiny (linguagem R). Por hora, proponho a análise quantitativa de métricas como visualizações, likes, dislikes e comentários. Bem como a análise textual das legendas geradas automaticamente pelo sistema do Youtube (quando habilitado pelo(s) autor(es) do canal).
 
 Infelizmente o acesso ao texto completo dos comentários é limitado pela API do Youtube, portanto eles não foram analisados (motivos financeiros). A motivação  para este estudo é meramente e unicamente por uma questão de curiosidade e pelo exercício da criatividade. Bem como uma forma divertida de se aperfeiçoar cada vez mais nas ferramentas da linguagem R (programação, métodos de exploração de dados, desenvolvimento de dashboards, etc.).
-
+</p>
 
 ## 2.Metodologia
 
 Primeiramente foi realizada a extração dos dados brutos. Para as métricas quantitativas, utilizei a API do Youtube (necessita de cadastro prévio) via pacote **tuber** do R. As legendas automáticas foram baixadas usando o pacote **RCurl** juntamente com a ferramenta online **diycaptions** (  http://diycaptions.com).
 
-Os dados textuais foram processados pelas funções do pacote **tm** e visualizados usando a ferramenta **wordcloud**.  No caso das métricas quantitativas do canal, os dados foram visualizados pela ferramenta **plotly**. A visualização foi realizada dentro de um dashboard desenvolvido em shiny,
+Os dados textuais foram processados pelas funções do pacote **tm** e visualizados usando a ferramenta **wordcloud**.  No caso das métricas quantitativas do canal, os dados foram visualizados pela ferramenta **plotly**. A visualização foi realizada dentro de um dashboard desenvolvido em shiny.
 
 <p align='center'> 
-![](/home/toshi/Desktop/work_butanta/youtube_mining/Images/worflow.jpg)
+![](../Images/worflow.jpg)
 <p/> 
 
 
 Carregando as bibliotecas
 
-```{r, message= FALSE}
+```{r, message=FALSE}
 library(rvest)
 library(ggplot2)
 library(dplyr)
@@ -98,6 +102,8 @@ library(stringr)
 library(tm)
 library(wordcloud)  
 library(RCurl)
+library(VennDiagram)
+library(kableExtra)
 ```
 
 ### 2.1.Extraindo métricas do canal
@@ -112,16 +118,19 @@ yt_oauth(client_id, key)
 ```
 
 Agora podemos extrair os dados dos canal alvo, usando o ID dele. Caso não saiba onde encontrar esta informação, é aquela série de caracteres na URL (conforme destacado na figura).
+ <p align='center'> 
+![](../Images/nerdologia_canal.jpg)
+ </p>
  
 ```{r, eval=FALSE}
-all_vid_nerdologia <- get_all_channel_video_stats(channel_id = 'UClu474HMt895mVxZdlIHXEA', mine = FALSE)
+all_vid_nerdologia <- get_all_channel_video_stats(channel_id= 'UClu474HMt895mVxZdlIHXEA', mine= FALSE)
 ```
 
 Precisamos formatar ele adequadamente, formatando os tipos de variáveis bem como fazendo uma limpeza na variável dos títulos.
 
 ```{r, eval=TRUE}
 # Dates
-date_split_list <- strsplit(x = as.character(all_vid_nerdologia$publication_date), split = 'T')
+date_split_list <- strsplit(x= as.character(all_vid_nerdologia$publication_date), split= 'T')
 date_split_list <- lapply(date_split_list, function(x){x[1]}) %>% unlist()
 all_vid_nerdologia['publication_date'] <- date_split_list
 all_vid_nerdologia$publication_date <- as.Date(all_vid_nerdologia$publication_date)
@@ -137,10 +146,50 @@ all_vid_nerdologia$commentCount <- as.numeric(all_vid_nerdologia$commentCount)
 all_vid_nerdologia$title <- gsub('\\s\\|\\s.*$', '', all_vid_nerdologia$title)
 ```
 
+#### Top 10 vídeos com mais Likes
+```{r}
+all_vid_nerdologia %>%
+    arrange(desc(likeCount)) %>%
+    head(10) %>%
+    select(title, likeCount, dislikeCount, commentCount) %>%
+    kable("html") %>% 
+    kable_styling("striped", full_width= F) %>%
+    column_spec(1:4, bold= T) %>%
+    row_spec(1:10, bold= T, color= "white", background= "#3399ff")
+
+```
+
+
+#### Top 10 vídeos com mais Dislikes
+```{r}
+all_vid_nerdologia %>%
+    arrange(desc(dislikeCount)) %>%
+    head(10) %>%
+    select(title, dislikeCount, likeCount, commentCount) %>%
+    kable("html") %>% 
+    kable_styling("striped", full_width= F) %>%
+    column_spec(1:4, bold= T) %>%
+    row_spec(1:10, bold= T, color= "white", background= "#ff3333")
+
+```
+
+#### Top 10 vídeos com mais comentários
+```{r}
+all_vid_nerdologia %>%
+    arrange(desc(commentCount)) %>%
+    head(10) %>%
+    select(title, commentCount, dislikeCount, likeCount) %>%
+    kable("html") %>% 
+    kable_styling("striped", full_width= F) %>%
+    column_spec(1:4, bold= T) %>%
+    row_spec(1:10, bold= T, color= "white", background= "#4d9900")
+
+```
+
 Agora, deixarei salvo o objeto da tabela processada, para carregar dentro do meu dashboard.
 
 ```{r, eval=FALSE}
-save(file = 'all_vid_nerdologia.RObj', all_vid_nerdologia)
+save(file= 'all_vid_nerdologia.RObj', all_vid_nerdologia)
 ```
 
 ### 2.1.Extraindo dados textuais das legendas e formatando
@@ -160,7 +209,7 @@ for(i in 1:length(url_request) ){
     Sys.sleep(30)
 }
 
-save(file = 'html_page.RObj', html_page)
+save(file= 'html_page.RObj', html_page)
 ```
 
 Agora farei o pré-tratamento dos dados textuais e a limpeza propriamente dita
@@ -175,13 +224,10 @@ html_page_text <- lapply(html_page, function(x){
 })
 
 # Saving object for individual process
-
 # save(file = 'html_page_text.RData', html_page_text)
 
-
 # Generating corpus text for all avaiable data
-
-text_df_total <- data.frame(doc_id = all_vid_nerdologia$id, text = unlist(html_page_text), stringsAsFactors = FALSE , drop=FALSE)
+text_df_total <- data.frame(doc_id= all_vid_nerdologia$id, text= unlist(html_page_text), stringsAsFactors= FALSE , drop=FALSE)
 
 text_corpus_df <- Corpus(DataframeSource(text_df_total))
 
@@ -194,15 +240,14 @@ text_corpus_df_filtered <- text_corpus_df %>%
     tm_map(stripWhitespace) %>%    
     tm_map(content_transformer(tolower))
 
-# Criando a matrix de termos:
+# Creanting a term matrix
 corpus_tf <- TermDocumentMatrix(text_corpus_df_filtered)
-
 
 corpus_m <- as.matrix(corpus_tf)
 
-corpus_m_sorted <- sort(rowSums(as.matrix(corpus_m)), decreasing=TRUE)
+corpus_m_sorted <- sort(rowSums(as.matrix(corpus_m)), decreasing= TRUE)
 
-df_total <- data.frame(word=names(corpus_m_sorted), freq=as.numeric(corpus_m_sorted))
+df_total <- data.frame(word= names(corpus_m_sorted), freq= as.numeric(corpus_m_sorted))
 
 df_total$word <- as.character(df_total$word)
 
@@ -210,35 +255,83 @@ df_total <- df_total[which(nchar(df_total$word) > 4), ]
 
 ```
 
-O gráfico de frequências total das palavras também deverão aparecer
+O gráfico de frequência total das palavras também deverá aparecer. Porém, lá na ferramenta irei adicionar mecanismos de controle de filtro.
 
 ```{r, eval=FALSE}
 
-wordcloud(df_total$word, df_total$freq, min.freq = 10, max.words=150, random.order=FALSE, rot.per=0.35, 
-          colors=brewer.pal(8, "Dark2"))
+wordcloud(df_total$word, df_total$freq, min.freq= 10, max.words= 150, random.order= FALSE, rot.per= 0.35, colors=brewer.pal(8, "Dark2"))
+
 ```
 
 <p align='center'> 
-![](/home/toshi/Desktop/work_butanta/youtube_mining/Images/word_cloud.png)
+![](../Images/word_cloud.png)
 <p/>
 
+Farei também uma word cloud para os títulos dos vídeos postados
 
-O gráfico do dashboard deve ser similar a este, porém, responsivo.
+```{r, out.width='100%', out.height='100%'}
+text_df_total <- data.frame(doc_id= all_vid_nerdologia$title, text= all_vid_nerdologia$title, stringsAsFactors= FALSE , drop=FALSE)
+
+text_corpus_df <- Corpus(DataframeSource(text_df_total))
+
+text_corpus_df_filtered <- text_corpus_df %>%
+    tm_map(stripWhitespace)  %>%    
+    tm_map(removePunctuation) %>%                              
+    tm_map(removeNumbers)   %>%                               
+    tm_map(removeWords, c(stopwords("portuguese"))) %>%  
+    tm_map(removeNumbers) %>%  
+    tm_map(stripWhitespace) %>%    
+    tm_map(content_transformer(tolower))
+
+# Creanting a term matrix
+corpus_tf <- TermDocumentMatrix(text_corpus_df_filtered)
+
+corpus_m <- as.matrix(corpus_tf)
+
+corpus_m_sorted <- sort(rowSums(as.matrix(corpus_m)), decreasing= TRUE)
+
+df_total <- data.frame(word= names(corpus_m_sorted), freq= as.numeric(corpus_m_sorted))
+
+df_total$word <- as.character(df_total$word)
+
+df_total_titulo <- df_total[which(nchar(df_total$word) > 2), ]
+
+wordcloud(df_total_titulo$word, df_total_titulo$freq, min.freq= 2, max.words= 100, random.order= FALSE, rot.per= 0.35, colors=brewer.pal(8, "Dark2"))
 
 
-```{r,  eval=TRUE, out.width='100%', out.height='100%'}
+```
+
+
+
+
+O gráfico do dashboard deve ser similar a este, porém, responsivo com mais informações e opções de filtro.
+
+```{r,  eval=TRUE, out.width='100%', out.height='60%'}
 all_vid_nerdologia %>%
-    gather(key= type_counts, value= counts, 
-           c(likeCount, dislikeCount, commentCount, viewCount))  %>%
-    filter(str_detect('likeCount|dislikeCount|commentCount', type_counts)) %>%
-    ggplot(aes(x= publication_date, y= as.numeric(counts), col= type_counts)) +
-    geom_line(size=1) +
-    geom_point() +
-    scale_x_date() +
-    theme_bw() +
-    ylab("Metric's counts") +
-    xlab("Video publication date") +
-    scale_color_manual(values = c('#440154FF', '#39568CFF', '#29AF7FFF'))
+    mutate(proportion_like= likeCount / viewCount,
+           proportion_dislike= dislikeCount / viewCount) %>%
+    arrange(publication_date) %>%
+    plot_ly() %>%
+    add_trace(x= ~publication_date, y= ~viewCount, 
+              name= 'View count', type= 'scatter', 
+              mode="markers+lines", text= ~paste('Video: ', title),
+              line= list(color= '#440154FF ', width= 4)) %>%
+    add_trace(x= ~publication_date, y= ~likeCount, 
+              name= 'Like count', type= 'scatter',
+              mode="markers+lines", text= ~paste('Video: ', title),
+              line= list(color= '#39568CFF', width= 4)) %>%
+    add_trace(x= ~publication_date, y= ~dislikeCount,
+              name= 'Dislike count', type= 'scatter', 
+              mode= "markers+lines", text= ~paste('Video: ', title),
+              line= list(color = '#29AF7FFF', width= 4)) %>%
+    add_trace(x= ~publication_date, y= ~commentCount,
+              name= 'Comment count', type= 'scatter', 
+              mode= "markers+lines", text= ~paste('Video: ', title),
+              line= list(color= '#FDE725FF', width= 4)) %>%
+    layout(xaxis= list(title= "Video publication date"),
+           yaxis= list (title= "Metric's count"),
+           font=  list(size= 16),
+           hovermode= 'compare')
 
 ```
 
